@@ -444,4 +444,152 @@ class Game:
         return killed_name
 
     def check_win_condition(self):
-        mafia_alive = sum(1 for p in self.players if p['is_alive'] and p['role'] == 
+        mafia_alive = sum(1 for p in self.players if p['is_alive'] and p['role'] == 'مافيا')
+        citizens_alive = sum(1 for p in self.players if p['is_alive'] and p['role'] != 'مافيا')
+        
+        # 1. فوز المواطنين: إذا مات جميع المافيا
+        if mafia_alive == 0: 
+            return 'citizens'
+            
+        # 2. فوز المافيا: إذا بقي مواطن واحد فقط (أو أقل)
+        # هذا الشرط يشمل الحالات التي يتساوى فيها المافيا مع المواطنين 
+        # لأن (مواطن واحد) يعني أن المافيا (2 على الأقل) يستطيعون السيطرة
+        if citizens_alive <= 1: 
+            return 'mafia'
+            
+        return None
+
+games = {}
+
+@app.route('/')
+def index():
+    return render_template_string(HTML_TEMPLATE)
+
+@socketio.on('join')
+def on_join(data):
+    username = data['username']
+    room = data['room']
+    join_room(room)
+    
+    if room not in games: games[room] = Game()
+    game = games[room]
+    
+    existing_player = next((p for p in game.players if p['name'] == username), None)
+    
+    if existing_player:
+        existing_player['sid'] = request.sid
+        emit('log_message', f"عودة {username}", to=request.sid)
+    else:
+        if game.phase != 'lobby':
+            emit('error_msg', "اللعبة جارية!", to=request.sid)
+            return
+        game.players.append({'name': username, 'role': None, 'is_alive': True, 'sid': request.sid})
+        emit('log_message', f"انضم {username}", room=room)
+    
+    emit('update_state', game.get_state(request.sid), room=room)
+
+@socketio.on('start_game')
+def on_start(data):
+    room = data['room']
+    if room in games:
+        game = games[room]
+        success, msg = game.assign_roles()
+        if success:
+            emit('update_state', game.get_state(), room=room)
+            emit('log_message', "🔔 <span class='highlight'>بدأ الليل...</span>", room=room)
+        else:
+            emit('error_msg', msg, to=request.sid)
+
+@socketio.on('restart_game')
+def on_restart(data):
+    room = data['room']
+    if room in games:
+        game = games[room]
+        game.reset_game()
+        emit('update_state', game.get_state(), room=room)
+        emit('log_message', "🔄 <span class='highlight'>إعادة اللعب!</span>", room=room)
+
+@socketio.on('night_action')
+def on_action(data):
+    room = data['room']
+    game = games.get(room)
+    if not game or game.phase != 'night': return
+    
+    action = data['action']
+    target = data['target']
+    player = next((p for p in game.players if p['sid'] == request.sid), None)
+    if not player or not player['is_alive']: return
+
+    if action == 'kill' and player['role'] == 'مافيا':
+        game.mafia_votes[player['name']] = target
+    elif action == 'save': game.night_actions['saves'].append(target)
+    elif action == 'check': 
+        target_role = next((p['role'] for p in game.players if p['name'] == target), 'مواطن')
+        result = "😈 مافيا!" if target_role == 'مافيا' else "😇 بريء."
+        emit('check_result', result, to=request.sid)
+    
+    game.players_who_acted.add(player['name'])
+    emit('update_state', game.get_state(request.sid), to=request.sid)
+
+    roles_needed = [p['name'] for p in game.players if p['is_alive'] and p['role'] in ['مافيا', 'دكتور', 'الشايب']]
+    
+    if all(name in game.players_who_acted for name in roles_needed):
+        socketio.sleep(1)
+        dead_person = game.process_night_results()
+        
+        msg = ""
+        mafia_targets = list(game.mafia_votes.values())
+        if mafia_targets and not all(t == mafia_targets[0] for t in mafia_targets):
+             msg = "☀️ طلع الصباح! لم يمت أحد (نجاة بأعجوبة)"
+        else:
+             msg = f"☀️ مات: <span class='highlight'>{dead_person}</span>" if dead_person else "☀️ طلع الصباح! لم يمت أحد"
+
+        emit('log_message', msg, room=room)
+        
+        winner = game.check_win_condition()
+        if winner:
+            game.phase = 'game_over'
+            end_msg = "🎉 فاز المواطنون!" if winner == 'citizens' else "😈 فازت المافيا!"
+            emit('log_message', end_msg, room=room)
+            emit('game_over', end_msg, room=room)
+            emit('update_state', game.get_state(), room=room)
+        else:
+            emit('update_state', game.get_state(), room=room)
+
+@socketio.on('day_vote')
+def on_vote(data):
+    room = data['room']
+    game = games.get(room)
+    if not game or game.phase != 'voting': return
+
+    target = data['target']
+    voter = next((p for p in game.players if p['sid'] == request.sid), None)
+    if not voter or not voter['is_alive']: return
+
+    game.votes[voter['name']] = target
+    emit('update_state', game.get_state(), room=room)
+    
+    vote_counts = {}
+    for t in game.votes.values(): vote_counts[t] = vote_counts.get(t, 0) + 1
+    
+    required = (sum(1 for p in game.players if p['is_alive']) // 2) + 1
+    if vote_counts.get(target, 0) >= required:
+        executed_player = next((p for p in game.players if p['name'] == target), None)
+        if executed_player:
+            executed_player['is_alive'] = False
+            emit('log_message', f"⚖️ تم إعدام <span class='highlight'>{target}</span>!", room=room)
+            
+            winner = game.check_win_condition()
+            if winner:
+                game.phase = 'game_over'
+                end_msg = "🎉 فاز المواطنون!" if winner == 'citizens' else "😈 فازت المافيا!"
+                emit('log_message', end_msg, room=room)
+                emit('game_over', end_msg, room=room)
+            else:
+                game.start_night()
+                socketio.sleep(3)
+                emit('log_message', "🌑 حل الظلام...", room=room)
+            emit('update_state', game.get_state(), room=room)
+
+if __name__ == '__main__':
+    socketio.run(app, debug=True, port=5000)
