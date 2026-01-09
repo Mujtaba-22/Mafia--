@@ -218,7 +218,10 @@ HTML_TEMPLATE = """
 
         function sendAction(target, actionType) {
             socket.emit('night_action', {room: myRoom, target: target, action: actionType});
-            document.getElementById('action-area').innerHTML = "<h3>⏳ تم تسجيل اختيارك...</h3>";
+            if(actionType === 'kill' || actionType === 'save' || actionType === 'check') {
+                // سنقوم بتحديث الواجهة عند وصول التأكيد من السيرفر
+                // document.getElementById('action-area').innerHTML = "<h3>⏳ تم تسجيل اختيارك...</h3>";
+            }
         }
         
         function votePlayer(target) {
@@ -226,6 +229,10 @@ HTML_TEMPLATE = """
         }
 
         socket.on('error_msg', (msg) => alert(msg));
+        socket.on('action_confirmed', () => {
+             document.getElementById('action-area').innerHTML = "<h3>⏳ تم تسجيل اختيارك...</h3>";
+        });
+        
         socket.on('check_result', (msg) => alert(`🔍 المحقق:\n${msg}`));
         socket.on('game_over', (msg) => alert(msg));
 
@@ -286,7 +293,7 @@ HTML_TEMPLATE = """
                      actionArea.innerHTML = "<h3>⏳ بانتظار الآخرين...</h3>";
                 } else {
                     if (myRole === 'مافيا') {
-                        actionArea.innerHTML += "<p style='font-size:12px;color:#e74c3c'>* يجب الاتفاق على ضحية واحدة</p>";
+                        actionArea.innerHTML += "<p style='font-size:12px;color:#e74c3c'>* يجب الاتفاق على ضحية واحدة (لا يمكن قتل زميلك)</p>";
                         data.players.forEach(p => {
                             if (p.is_alive && p.name !== myName) 
                                 actionArea.innerHTML += `<button onclick="sendAction('${p.name}', 'kill')">🔫 ${p.name}</button>`;
@@ -452,8 +459,6 @@ class Game:
             return 'citizens'
             
         # 2. فوز المافيا: إذا بقي مواطن واحد فقط (أو أقل)
-        # هذا الشرط يشمل الحالات التي يتساوى فيها المافيا مع المواطنين 
-        # لأن (مواطن واحد) يعني أن المافيا (2 على الأقل) يستطيعون السيطرة
         if citizens_alive <= 1: 
             return 'mafia'
             
@@ -520,8 +525,15 @@ def on_action(data):
     player = next((p for p in game.players if p['sid'] == request.sid), None)
     if not player or not player['is_alive']: return
 
+    # --- التعديل هنا: التحقق من هدف المافيا ---
     if action == 'kill' and player['role'] == 'مافيا':
+        # البحث عن دور اللاعب المستهدف
+        target_player = next((p for p in game.players if p['name'] == target), None)
+        if target_player and target_player['role'] == 'مافيا':
+             emit('error_msg', "🚫 لا يمكنك قتل زميلك المافيا!", to=request.sid)
+             return
         game.mafia_votes[player['name']] = target
+
     elif action == 'save': game.night_actions['saves'].append(target)
     elif action == 'check': 
         target_role = next((p['role'] for p in game.players if p['name'] == target), 'مواطن')
@@ -529,6 +541,7 @@ def on_action(data):
         emit('check_result', result, to=request.sid)
     
     game.players_who_acted.add(player['name'])
+    emit('action_confirmed', to=request.sid) # تأكيد الواجهة
     emit('update_state', game.get_state(request.sid), to=request.sid)
 
     roles_needed = [p['name'] for p in game.players if p['is_alive'] and p['role'] in ['مافيا', 'دكتور', 'الشايب']]
@@ -561,23 +574,33 @@ def on_vote(data):
     room = data['room']
     game = games.get(room)
     if not game or game.phase != 'voting': return
-
+    
+    voter_sid = request.sid
     target = data['target']
-    voter = next((p for p in game.players if p['sid'] == request.sid), None)
+    
+    voter = next((p for p in game.players if p['sid'] == voter_sid), None)
     if not voter or not voter['is_alive']: return
 
+    # السماح بتغيير التصويت أو التصويت الجديد
     game.votes[voter['name']] = target
+    
     emit('update_state', game.get_state(), room=room)
     
-    vote_counts = {}
-    for t in game.votes.values(): vote_counts[t] = vote_counts.get(t, 0) + 1
+    current_votes_count = {}
+    for t in game.votes.values():
+        current_votes_count[t] = current_votes_count.get(t, 0) + 1
     
-    required = (sum(1 for p in game.players if p['is_alive']) // 2) + 1
-    if vote_counts.get(target, 0) >= required:
-        executed_player = next((p for p in game.players if p['name'] == target), None)
-        if executed_player:
-            executed_player['is_alive'] = False
-            emit('log_message', f"⚖️ تم إعدام <span class='highlight'>{target}</span>!", room=room)
+    alive_count = sum(1 for p in game.players if p['is_alive'])
+    votes_needed = (alive_count // 2) + 1
+    
+    for t, count in current_votes_count.items():
+        if count >= votes_needed:
+            # إقصاء اللاعب
+            eliminated = t
+            for p in game.players:
+                if p['name'] == eliminated: p['is_alive'] = False
+            
+            emit('log_message', f"⚖️ تم إعدام: <span class='highlight'>{eliminated}</span>", room=room)
             
             winner = game.check_win_condition()
             if winner:
@@ -587,9 +610,10 @@ def on_vote(data):
                 emit('game_over', end_msg, room=room)
             else:
                 game.start_night()
-                socketio.sleep(3)
-                emit('log_message', "🌑 حل الظلام...", room=room)
+                emit('log_message', "🔔 <span class='highlight'>بدأ الليل...</span>", room=room)
+            
             emit('update_state', game.get_state(), room=room)
+            break
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True, port=5000)
+    socketio.run(app, debug=True, allow_unsafe_werkzeug=True)
