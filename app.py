@@ -57,8 +57,7 @@ HTML_TEMPLATE = """
             
             <div id="action-area"></div>
             
-            <!-- أزرار التحكم للمشرف -->
-            <button id="start-btn" onclick="startGame()" class="hidden">👑 بدء اللعبة</button>
+            <button id="start-btn" onclick="startGame()" class="hidden">👑 بدء اللعبة (يلزم 5+)</button>
             <button id="restart-btn" onclick="restartGame()" class="hidden restart-btn">🔄 بدء لعبة جديدة</button>
         </div>
 
@@ -102,7 +101,7 @@ HTML_TEMPLATE = """
         }
 
         function startGame() {
-            if(confirm("بدء اللعبة وتوزيع الأدوار؟")) socket.emit('start_game', {room: myRoom});
+            socket.emit('start_game', {room: myRoom});
         }
         
         function restartGame() {
@@ -123,7 +122,6 @@ HTML_TEMPLATE = """
         
         socket.on('game_over', (msg) => {
             alert(msg);
-            // لا نعيد التحميل هنا، ننتظر المشرف يضغط "إعادة اللعب"
         });
 
         socket.on('update_state', (data) => {
@@ -133,7 +131,6 @@ HTML_TEMPLATE = """
             
             const isHost = data.players.length > 0 && data.players[0].name === myName; 
             
-            // التحكم بأزرار المشرف
             document.getElementById('start-btn').classList.add('hidden');
             document.getElementById('restart-btn').classList.add('hidden');
 
@@ -147,7 +144,6 @@ HTML_TEMPLATE = """
 
             document.getElementById('game-status').innerText = `المرحلة: ${data.phase_display}`;
 
-            // My State & Role
             const me = data.players.find(p => p.name === myName);
             const roleDiv = document.getElementById('my-role');
             
@@ -162,7 +158,6 @@ HTML_TEMPLATE = """
                 }
             }
 
-            // Action Area Logic
             const actionArea = document.getElementById('action-area');
             actionArea.innerHTML = "";
             
@@ -209,7 +204,6 @@ HTML_TEMPLATE = """
                 });
             }
 
-            // Players List
             data.players.forEach(p => {
                 const item = document.createElement('div');
                 item.className = `player-item ${p.is_alive ? 'alive' : 'dead'}`;
@@ -242,7 +236,6 @@ class Game:
         self.votes = {}
 
     def reset_game(self):
-        # إعادة اللعبة للبداية مع الاحتفاظ باللاعبين
         self.phase = 'lobby'
         self.night_actions = {'kills': [], 'saves': [], 'checks': []}
         self.players_who_acted = set()
@@ -291,20 +284,30 @@ class Game:
 
     def assign_roles(self):
         names = [p['name'] for p in self.players]
-        random.shuffle(names)
-        roles_dist = {}
-        count = len(names)
+        num_players = len(names)
         
-        if count >= 1: roles_dist[names[0]] = 'مافيا'
-        if count >= 3: roles_dist[names[1]] = 'دكتور'
-        if count >= 4: roles_dist[names[2]] = 'الشايب'
-        if count >= 7: roles_dist[names[3]] = 'مافيا'
+        # 1. شرط الحد الأدنى
+        if num_players < 5:
+            return False, "تحتاج 5 لاعبين على الأقل لبدء اللعبة!"
+
+        # 2. تجهيز قائمة الأدوار الثابتة
+        # 2 مافيا + 1 دكتور + 1 شايب = 4 أدوار خاصة
+        roles_pool = ['مافيا', 'مافيا', 'دكتور', 'الشايب']
         
-        for p in self.players:
-            p['role'] = roles_dist.get(p['name'], 'مواطن')
+        # 3. تعبئة الباقي بمواطنين
+        citizens_needed = num_players - len(roles_pool)
+        roles_pool.extend(['مواطن'] * citizens_needed)
+        
+        # 4. الخلط
+        random.shuffle(roles_pool)
+        
+        # 5. التوزيع
+        for i, p in enumerate(self.players):
+            p['role'] = roles_pool[i]
             p['is_alive'] = True
         
         self.start_night()
+        return True, "تم توزيع الأدوار وبدء الليل!"
 
     def start_night(self):
         self.phase = 'night'
@@ -320,144 +323,4 @@ class Game:
             if target_to_kill in self.night_actions['saves']:
                 killed_name = None 
             else:
-                killed_name = target_to_kill
-                for p in self.players:
-                    if p['name'] == killed_name:
-                        p['is_alive'] = False
-        self.phase = 'voting'
-        return killed_name
-
-    def check_win_condition(self):
-        mafia_alive = sum(1 for p in self.players if p['is_alive'] and p['role'] == 'مافيا')
-        citizens_alive = sum(1 for p in self.players if p['is_alive'] and p['role'] != 'مافيا')
-        
-        if mafia_alive == 0: return 'citizens'
-        if mafia_alive >= citizens_alive: return 'mafia'
-        return None
-
-games = {}
-
-@app.route('/')
-def index():
-    return render_template_string(HTML_TEMPLATE)
-
-@socketio.on('join')
-def on_join(data):
-    username = data['username']
-    room = data['room']
-    join_room(room)
-    
-    if room not in games: games[room] = Game()
-    game = games[room]
-    
-    existing_player = next((p for p in game.players if p['name'] == username), None)
-    
-    if existing_player:
-        existing_player['sid'] = request.sid
-        emit('log_message', f"عودة {username}", to=request.sid)
-    else:
-        if game.phase != 'lobby':
-            emit('error_msg', "اللعبة جارية!", to=request.sid)
-            return
-        game.players.append({'name': username, 'role': None, 'is_alive': True, 'sid': request.sid})
-        emit('log_message', f"انضم {username}", room=room)
-    
-    emit('update_state', game.get_state(request.sid), room=room)
-
-@socketio.on('start_game')
-def on_start(data):
-    room = data['room']
-    if room in games:
-        game = games[room]
-        if len(game.players) < 3: 
-             emit('error_msg', "تحتاج 3 لاعبين!", to=request.sid)
-             return
-        game.assign_roles()
-        emit('update_state', game.get_state(), room=room)
-        emit('log_message', "🔔 <span class='highlight'>بدأت اللعبة!</span>", room=room)
-
-@socketio.on('restart_game')
-def on_restart(data):
-    room = data['room']
-    if room in games:
-        game = games[room]
-        game.reset_game() # إعادة تعيين المتغيرات
-        emit('update_state', game.get_state(), room=room)
-        emit('log_message', "🔄 <span class='highlight'>تم تصفير اللعبة! بانتظار المشرف للبدء.</span>", room=room)
-
-@socketio.on('night_action')
-def on_action(data):
-    room = data['room']
-    game = games.get(room)
-    if not game or game.phase != 'night': return
-    
-    action = data['action']
-    target = data['target']
-    player = next((p for p in game.players if p['sid'] == request.sid), None)
-    if not player or not player['is_alive']: return
-
-    if action == 'kill': game.night_actions['kills'].append(target)
-    elif action == 'save': game.night_actions['saves'].append(target)
-    elif action == 'check': 
-        target_role = next((p['role'] for p in game.players if p['name'] == target), 'مواطن')
-        result = "😈 مافيا!" if target_role == 'مافيا' else "😇 بريء."
-        emit('check_result', result, to=request.sid)
-    
-    game.players_who_acted.add(player['name'])
-    emit('update_state', game.get_state(request.sid), to=request.sid)
-
-    roles_needed = [p['name'] for p in game.players if p['is_alive'] and p['role'] in ['مافيا', 'دكتور', 'الشايب']]
-    
-    if all(name in game.players_who_acted for name in roles_needed):
-        socketio.sleep(1)
-        dead_person = game.process_night_results()
-        msg = f"☀️ مات: <span class='highlight'>{dead_person}</span>" if dead_person else "☀️ لم يمت أحد!"
-        emit('log_message', msg, room=room)
-        
-        winner = game.check_win_condition()
-        if winner:
-            game.phase = 'game_over' # تغيير الحالة لإظهار زر الإعادة
-            end_msg = "🎉 فاز المواطنون!" if winner == 'citizens' else "😈 فازت المافيا!"
-            emit('log_message', end_msg, room=room)
-            emit('game_over', end_msg, room=room)
-            emit('update_state', game.get_state(), room=room)
-        else:
-            emit('update_state', game.get_state(), room=room)
-
-@socketio.on('day_vote')
-def on_vote(data):
-    room = data['room']
-    game = games.get(room)
-    if not game or game.phase != 'voting': return
-
-    target = data['target']
-    voter = next((p for p in game.players if p['sid'] == request.sid), None)
-    if not voter or not voter['is_alive']: return
-
-    game.votes[voter['name']] = target
-    emit('update_state', game.get_state(), room=room)
-    
-    vote_counts = {}
-    for t in game.votes.values(): vote_counts[t] = vote_counts.get(t, 0) + 1
-    
-    required = (sum(1 for p in game.players if p['is_alive']) // 2) + 1
-    if vote_counts.get(target, 0) >= required:
-        executed_player = next((p for p in game.players if p['name'] == target), None)
-        if executed_player:
-            executed_player['is_alive'] = False
-            emit('log_message', f"⚖️ تم إعدام <span class='highlight'>{target}</span>!", room=room)
-            
-            winner = game.check_win_condition()
-            if winner:
-                game.phase = 'game_over'
-                end_msg = "🎉 فاز المواطنون!" if winner == 'citizens' else "😈 فازت المافيا!"
-                emit('log_message', end_msg, room=room)
-                emit('game_over', end_msg, room=room)
-            else:
-                game.start_night()
-                socketio.sleep(3)
-                emit('log_message', "🌑 حل الظلام...", room=room)
-            emit('update_state', game.get_state(), room=room)
-
-if __name__ == '__main__':
-    socketio.run(app, debug=True, port=5000)
+                killed_name = ta
