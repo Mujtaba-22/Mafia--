@@ -4,7 +4,7 @@ from flask import Flask, render_template_string, request
 from flask_socketio import SocketIO, emit, join_room
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'falcons_secret_key_123'
+app.config['SECRET_KEY'] = 'mafia_classic_secret'
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
 # --- HTML Template ---
@@ -14,62 +14,172 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>مافيا فالكونز 🦅</title>
+    <title>Mafia Online 🕵️‍♂️</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #121212; color: #e0e0e0; text-align: center; padding: 20px; margin: 0; }
-        .card { background: #1e1e1e; padding: 20px; border-radius: 12px; margin: 15px auto; max-width: 500px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); border: 1px solid #333; }
-        h1 { color: #2ecc71; text-shadow: 0 0 10px rgba(46, 204, 113, 0.3); }
-        button { background: #27ae60; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 16px; margin: 5px; transition: all 0.3s; font-weight: bold; width: 100%; max-width: 300px; }
-        button:hover { background: #219150; transform: translateY(-2px); }
-        button:disabled { background: #555; cursor: not-allowed; opacity: 0.6; }
-        button.vote-btn { background: #c0392b; }
-        button.restart-btn { background: #8e44ad; margin-top: 10px; } 
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --text-color: #e0e0e0;
+            --accent-color: #c0392b; /* أحمر مافيا */
+            --btn-color: #e74c3c;
+            --border-color: #333;
+        }
+
+        /* ثيم النهار */
+        body.day-theme {
+            --bg-color: #f0f2f5;
+            --card-bg: #ffffff;
+            --text-color: #2c3e50;
+            --accent-color: #2980b9;
+            --border-color: #ddd;
+        }
+
+        body { 
+            font-family: 'Tajawal', sans-serif; 
+            background-color: var(--bg-color); 
+            color: var(--text-color); 
+            text-align: center; 
+            padding: 20px; 
+            margin: 0; 
+            transition: background-color 1s ease, color 0.5s ease;
+        }
+
+        .container { max-width: 600px; margin: 0 auto; }
+
+        .card { 
+            background: var(--card-bg); 
+            padding: 25px; 
+            border-radius: 15px; 
+            margin: 15px auto; 
+            box-shadow: 0 8px 20px rgba(0,0,0,0.2); 
+            border: 1px solid var(--border-color); 
+            transition: background 0.5s ease;
+        }
+
+        h1 { 
+            font-size: 3rem; 
+            margin-bottom: 10px; 
+            color: var(--accent-color); 
+            text-transform: uppercase; 
+            letter-spacing: 2px;
+        }
+
+        button { 
+            background: var(--accent-color); 
+            color: white; 
+            border: none; 
+            padding: 15px 30px; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            font-size: 16px; 
+            margin: 5px; 
+            font-weight: bold; 
+            width: 100%; 
+            max-width: 300px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+        button:hover { filter: brightness(1.1); transform: translateY(-2px); }
+        button:disabled { background: #7f8c8d; cursor: not-allowed; opacity: 0.6; transform: none; }
+        
         button.action-btn { background: #f39c12; color: #000; }
-        input { padding: 12px; border-radius: 8px; border: 1px solid #444; background: #2c2c2c; color: white; width: 80%; margin-bottom: 10px; font-size: 16px; }
-        .role-reveal { font-size: 24px; font-weight: bold; color: #f1c40f; margin: 20px 0; padding: 15px; background: rgba(241, 196, 15, 0.1); border-radius: 8px; border: 1px solid #f1c40f; }
-        .status { color: #aaa; font-size: 14px; margin-bottom: 10px; font-weight: bold; }
+        button.vote-btn { background: #27ae60; } /* أخضر للتصويت في النهار */
+
+        input { 
+            padding: 15px; 
+            border-radius: 8px; 
+            border: 2px solid var(--border-color); 
+            background: var(--bg-color); 
+            color: var(--text-color); 
+            width: 80%; 
+            margin-bottom: 15px; 
+            font-size: 16px; 
+            outline: none;
+        }
+        input:focus { border-color: var(--accent-color); }
+
+        .role-reveal { 
+            font-size: 24px; 
+            font-weight: bold; 
+            color: #f1c40f; 
+            margin: 20px 0; 
+            padding: 15px; 
+            background: rgba(0,0,0,0.3); 
+            border-radius: 8px; 
+            border-left: 5px solid #f1c40f; 
+        }
+
+        .status { font-size: 18px; margin-bottom: 15px; font-weight: bold; opacity: 0.8; }
         .hidden { display: none; }
-        .player-item { padding: 12px; background: #2c2c2c; margin: 8px 0; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border-left: 5px solid #555; }
-        .player-item.alive { border-left-color: #27ae60; }
-        .player-item.dead { border-left-color: #c0392b; opacity: 0.6; text-decoration: line-through; }
-        #logs-container { max-height: 250px; overflow-y: auto; text-align: right; background: #000; padding: 10px; border-radius: 5px; font-size: 13px; font-family: monospace; border: 1px solid #333; }
-        .log-entry { margin-bottom: 5px; border-bottom: 1px solid #222; padding-bottom: 2px; }
-        .highlight { color: #f1c40f; }
+
+        .player-item { 
+            padding: 15px; 
+            background: rgba(128, 128, 128, 0.1); 
+            margin: 8px 0; 
+            border-radius: 8px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            border-right: 4px solid transparent;
+        }
+        .player-item.alive { border-right-color: #27ae60; }
+        .player-item.dead { border-right-color: #c0392b; opacity: 0.5; text-decoration: line-through; }
+
+        #logs-container { 
+            max-height: 250px; 
+            overflow-y: auto; 
+            text-align: right; 
+            background: rgba(0,0,0,0.2); 
+            padding: 15px; 
+            border-radius: 8px; 
+            font-size: 14px; 
+        }
+        .log-entry { margin-bottom: 8px; border-bottom: 1px solid rgba(128,128,128,0.2); padding-bottom: 4px; }
+        .highlight { color: var(--accent-color); font-weight: bold; }
+        
+        /* أيقونات الحالة */
+        .icon-sun { font-size: 50px; display: block; margin: 0 auto; animation: spin 10s linear infinite; }
+        .icon-moon { font-size: 50px; display: block; margin: 0 auto; color: #f1c40f; text-shadow: 0 0 20px #f1c40f; }
+
+        @keyframes spin { 100% { transform: rotate(360deg); } }
     </style>
 </head>
-<body>
-    <h1>🦅 مافيا فالكونز</h1>
+<body class="">
+    <div class="container">
+        <h1>MAFIA 🎩</h1>
 
-    <div id="login-area" class="card">
-        <h3>تسجيل الدخول</h3>
-        <input type="text" id="username" placeholder="اسمك (مثال: عادل)" />
-        <input type="text" id="room" placeholder="اسم الغرفة (مثال: Falcons1)" />
-        <br><br>
-        <button onclick="joinGame()">🚀 دخول اللعبة</button>
-    </div>
-
-    <div id="game-area">
-        <div class="card">
-            <h2>غرفة: <span id="room-name"></span></h2>
-            <div id="game-status" class="status">جاري الاتصال...</div>
-            <div id="my-role" class="role-reveal hidden"></div>
-            
-            <div id="action-area"></div>
-            
-            <button id="start-btn" onclick="startGame()" class="hidden">👑 بدء اللعبة (يلزم 5+)</button>
-            <button id="restart-btn" onclick="restartGame()" class="hidden restart-btn">🔄 بدء لعبة جديدة</button>
+        <div id="login-area" class="card">
+            <h3>تسجيل الدخول</h3>
+            <input type="text" id="username" placeholder="اسمك (مثال: المحقق)" />
+            <input type="text" id="room" placeholder="اسم الغرفة (مثال: Room1)" />
+            <br>
+            <button onclick="joinGame()">دخول اللعبة</button>
         </div>
 
-        <div class="card">
-            <h3>👥 اللاعبون <span id="player-count"></span></h3>
-            <div id="players-list"></div>
-        </div>
-        
-        <div class="card">
-            <h3>📜 الأحداث</h3>
-            <div id="logs-container">
-                <div id="game-logs"></div>
+        <div id="game-area">
+            <div class="card">
+                <div id="phase-icon"></div>
+                <h2>غرفة: <span id="room-name"></span></h2>
+                <div id="game-status" class="status">جاري الاتصال...</div>
+                <div id="my-role" class="role-reveal hidden"></div>
+                
+                <div id="action-area"></div>
+                
+                <button id="start-btn" onclick="startGame()" class="hidden">👑 بدء اللعبة (يلزم 5+)</button>
+                <button id="restart-btn" onclick="restartGame()" class="hidden action-btn">🔄 لعبة جديدة</button>
+            </div>
+
+            <div class="card">
+                <h3>اللاعبون <span id="player-count"></span></h3>
+                <div id="players-list"></div>
+            </div>
+            
+            <div class="card">
+                <h3>سجل الأحداث</h3>
+                <div id="logs-container">
+                    <div id="game-logs"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -89,7 +199,7 @@ HTML_TEMPLATE = """
         function joinGame() {
             myName = document.getElementById('username').value.trim();
             myRoom = document.getElementById('room').value.trim();
-            if (!myName || !myRoom) return alert("الرجاء إدخال البيانات");
+            if (!myName || !myRoom) return alert("أدخل الاسم والغرفة");
             
             localStorage.setItem('mafia_name', myName);
             localStorage.setItem('mafia_room', myRoom);
@@ -100,17 +210,15 @@ HTML_TEMPLATE = """
             document.getElementById('room-name').innerText = myRoom;
         }
 
-        function startGame() {
-            socket.emit('start_game', {room: myRoom});
-        }
+        function startGame() { socket.emit('start_game', {room: myRoom}); }
         
         function restartGame() {
-            if(confirm("هل تريد تصفير اللعبة والبدء من جديد؟")) socket.emit('restart_game', {room: myRoom});
+            if(confirm("بدء لعبة جديدة؟")) socket.emit('restart_game', {room: myRoom});
         }
 
         function sendAction(target, actionType) {
             socket.emit('night_action', {room: myRoom, target: target, action: actionType});
-            document.getElementById('action-area').innerHTML = "<h3>⏳ تم إرسال أمرك...</h3>";
+            document.getElementById('action-area').innerHTML = "<h3>⏳ تم تسجيل اختيارك...</h3>";
         }
         
         function votePlayer(target) {
@@ -118,13 +226,22 @@ HTML_TEMPLATE = """
         }
 
         socket.on('error_msg', (msg) => alert(msg));
-        socket.on('check_result', (msg) => alert(`🔍 نتيجة التحقيق:\n${msg}`));
-        
-        socket.on('game_over', (msg) => {
-            alert(msg);
-        });
+        socket.on('check_result', (msg) => alert(`🔍 المحقق:\n${msg}`));
+        socket.on('game_over', (msg) => alert(msg));
 
         socket.on('update_state', (data) => {
+            // تحديث الثيم (ليل / نهار)
+            const body = document.body;
+            const iconDiv = document.getElementById('phase-icon');
+            
+            if (data.phase === 'voting' || data.phase === 'lobby' || data.phase === 'game_over') {
+                body.classList.add('day-theme'); // نهار
+                iconDiv.innerHTML = (data.phase === 'voting') ? "<div class='icon-sun'>☀️</div>" : "";
+            } else {
+                body.classList.remove('day-theme'); // ليل
+                iconDiv.innerHTML = "<div class='icon-moon'>🌙</div>";
+            }
+
             const list = document.getElementById('players-list');
             list.innerHTML = "";
             document.getElementById('player-count').innerText = `(${data.players.length})`;
@@ -135,14 +252,11 @@ HTML_TEMPLATE = """
             document.getElementById('restart-btn').classList.add('hidden');
 
             if (isHost) {
-                if (data.phase === 'lobby') {
-                    document.getElementById('start-btn').classList.remove('hidden');
-                } else if (data.phase === 'game_over') {
-                    document.getElementById('restart-btn').classList.remove('hidden');
-                }
+                if (data.phase === 'lobby') document.getElementById('start-btn').classList.remove('hidden');
+                else if (data.phase === 'game_over') document.getElementById('restart-btn').classList.remove('hidden');
             }
 
-            document.getElementById('game-status').innerText = `المرحلة: ${data.phase_display}`;
+            document.getElementById('game-status').innerText = data.phase_display;
 
             const me = data.players.find(p => p.name === myName);
             const roleDiv = document.getElementById('my-role');
@@ -151,7 +265,7 @@ HTML_TEMPLATE = """
                 amIAlive = me.is_alive;
                 if (me.role && data.phase !== 'lobby') {
                     roleDiv.classList.remove('hidden');
-                    roleDiv.innerText = `أنت: ${me.role}`;
+                    roleDiv.innerText = `الدور: ${me.role}`;
                     myRole = me.role;
                 } else {
                     roleDiv.classList.add('hidden');
@@ -162,20 +276,21 @@ HTML_TEMPLATE = """
             actionArea.innerHTML = "";
             
             if (data.phase === 'game_over') {
-                actionArea.innerHTML = "<h3>🏁 انتهت اللعبة! بانتظار المشرف للبدء من جديد.</h3>";
+                actionArea.innerHTML = "<h3>🏁 انتهت اللعبة</h3>";
             }
             else if (!amIAlive) {
-                 actionArea.innerHTML = "<h3 style='color:#c0392b'>💀 لقد تم إقصاؤك (ميت)</h3>";
+                 actionArea.innerHTML = "<h3 style='color:#c0392b'>💀 لقد تم إقصاؤك</h3>";
             } 
             else if (data.phase === 'night') {
-                actionArea.innerHTML = "<h3>🌙 الليل: قم بمهمتك</h3>";
+                actionArea.innerHTML = "<h3>🌙 اختر هدفك</h3>";
                 if (data.pending_action) {
-                     actionArea.innerHTML = "<h3>⏳ تم، بانتظار البقية...</h3>";
+                     actionArea.innerHTML = "<h3>⏳ بانتظار الآخرين...</h3>";
                 } else {
                     if (myRole === 'مافيا') {
+                        actionArea.innerHTML += "<p style='font-size:12px;color:#e74c3c'>* يجب الاتفاق على ضحية واحدة</p>";
                         data.players.forEach(p => {
                             if (p.is_alive && p.name !== myName) 
-                                actionArea.innerHTML += `<button class='vote-btn' onclick="sendAction('${p.name}', 'kill')">🔫 ${p.name}</button>`;
+                                actionArea.innerHTML += `<button onclick="sendAction('${p.name}', 'kill')">🔫 ${p.name}</button>`;
                         });
                     }
                     else if (myRole === 'دكتور') {
@@ -207,7 +322,7 @@ HTML_TEMPLATE = """
             data.players.forEach(p => {
                 const item = document.createElement('div');
                 item.className = `player-item ${p.is_alive ? 'alive' : 'dead'}`;
-                let statusIcon = p.is_alive ? '💚' : '💀';
+                let statusIcon = p.is_alive ? '🙂' : '💀';
                 item.innerHTML = `<strong>${p.name}</strong> <span>${statusIcon}</span>`;
                 list.appendChild(item);
             });
@@ -225,19 +340,21 @@ HTML_TEMPLATE = """
 </html>
 """
 
-# --- Backend Logic ---
+# --- Backend Logic (نفس المنطق السابق تماماً) ---
 
 class Game:
     def __init__(self):
         self.players = [] 
         self.phase = 'lobby' 
-        self.night_actions = {'kills': [], 'saves': [], 'checks': []}
+        self.night_actions = {'saves': [], 'checks': []}
+        self.mafia_votes = {} 
         self.players_who_acted = set()
         self.votes = {}
 
     def reset_game(self):
         self.phase = 'lobby'
-        self.night_actions = {'kills': [], 'saves': [], 'checks': []}
+        self.night_actions = {'saves': [], 'checks': []}
+        self.mafia_votes = {}
         self.players_who_acted = set()
         self.votes = {}
         for p in self.players:
@@ -254,9 +371,9 @@ class Game:
             })
         
         phase_ar = {
-            'lobby': 'الانتظار في اللوبي',
+            'lobby': 'صالة الانتظار',
             'night': 'الليل 🌑',
-            'voting': 'النهار والتصويت ☀️',
+            'voting': 'النهار (نقاش وتصويت) ☀️',
             'game_over': 'انتهت اللعبة 🏁'
         }
         
@@ -286,47 +403,44 @@ class Game:
         names = [p['name'] for p in self.players]
         num_players = len(names)
         
-        # 1. شرط الحد الأدنى
         if num_players < 5:
-            return False, "تحتاج 5 لاعبين على الأقل لبدء اللعبة!"
+            return False, "يجب توفر 5 لاعبين على الأقل!"
 
-        # 2. تجهيز قائمة الأدوار الثابتة
-        # 2 مافيا + 1 دكتور + 1 شايب = 4 أدوار خاصة
         roles_pool = ['مافيا', 'مافيا', 'دكتور', 'الشايب']
-        
-        # 3. تعبئة الباقي بمواطنين
         citizens_needed = num_players - len(roles_pool)
         roles_pool.extend(['مواطن'] * citizens_needed)
         
-        # 4. الخلط
         random.shuffle(roles_pool)
-        
-        # 5. التوزيع
         for i, p in enumerate(self.players):
             p['role'] = roles_pool[i]
             p['is_alive'] = True
         
         self.start_night()
-        return True, "تم توزيع الأدوار وبدء الليل!"
+        return True, "بدأت اللعبة!"
 
     def start_night(self):
         self.phase = 'night'
-        self.night_actions = {'kills': [], 'saves': [], 'checks': []}
+        self.night_actions = {'saves': [], 'checks': []}
+        self.mafia_votes = {} 
         self.players_who_acted = set()
         self.votes = {} 
 
     def process_night_results(self):
         killed_name = None
-        target_to_kill = self.night_actions['kills'][-1] if self.night_actions['kills'] else None
+        targets = list(self.mafia_votes.values())
+        
+        target_to_kill = None
+        if targets:
+            if all(t == targets[0] for t in targets): target_to_kill = targets[0]
+            else: target_to_kill = None
         
         if target_to_kill:
-            if target_to_kill in self.night_actions['saves']:
-                killed_name = None 
+            if target_to_kill in self.night_actions['saves']: killed_name = None 
             else:
                 killed_name = target_to_kill
                 for p in self.players:
-                    if p['name'] == killed_name:
-                        p['is_alive'] = False
+                    if p['name'] == killed_name: p['is_alive'] = False
+        
         self.phase = 'voting'
         return killed_name
 
@@ -372,12 +486,10 @@ def on_start(data):
     room = data['room']
     if room in games:
         game = games[room]
-        
         success, msg = game.assign_roles()
-        
         if success:
             emit('update_state', game.get_state(), room=room)
-            emit('log_message', "🔔 <span class='highlight'>بدأت اللعبة! حل الظلام...</span>", room=room)
+            emit('log_message', "🔔 <span class='highlight'>بدأ الليل...</span>", room=room)
         else:
             emit('error_msg', msg, to=request.sid)
 
@@ -388,7 +500,7 @@ def on_restart(data):
         game = games[room]
         game.reset_game()
         emit('update_state', game.get_state(), room=room)
-        emit('log_message', "🔄 <span class='highlight'>تم تصفير اللعبة!</span>", room=room)
+        emit('log_message', "🔄 <span class='highlight'>إعادة اللعب!</span>", room=room)
 
 @socketio.on('night_action')
 def on_action(data):
@@ -401,7 +513,8 @@ def on_action(data):
     player = next((p for p in game.players if p['sid'] == request.sid), None)
     if not player or not player['is_alive']: return
 
-    if action == 'kill': game.night_actions['kills'].append(target)
+    if action == 'kill' and player['role'] == 'مافيا':
+        game.mafia_votes[player['name']] = target
     elif action == 'save': game.night_actions['saves'].append(target)
     elif action == 'check': 
         target_role = next((p['role'] for p in game.players if p['name'] == target), 'مواطن')
@@ -416,7 +529,14 @@ def on_action(data):
     if all(name in game.players_who_acted for name in roles_needed):
         socketio.sleep(1)
         dead_person = game.process_night_results()
-        msg = f"☀️ مات: <span class='highlight'>{dead_person}</span>" if dead_person else "☀️ لم يمت أحد!"
+        
+        msg = ""
+        mafia_targets = list(game.mafia_votes.values())
+        if mafia_targets and not all(t == mafia_targets[0] for t in mafia_targets):
+             msg = "☀️ طلع الصباح! لم يمت أحد (نجاة بأعجوبة)"
+        else:
+             msg = f"☀️ مات: <span class='highlight'>{dead_person}</span>" if dead_person else "☀️ طلع الصباح! لم يمت أحد"
+
         emit('log_message', msg, room=room)
         
         winner = game.check_win_condition()
