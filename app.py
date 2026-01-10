@@ -14,7 +14,7 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mafia Online 🕵️‍♂️</title>
-    <!-- استخدام رابط CDN موثوق -->
+    <!-- استخدام CDN موثوق -->
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
     <style>
@@ -29,7 +29,7 @@ HTML_TEMPLATE = """
         button:hover { filter: brightness(1.1); transform: translateY(-2px); }
         input[type="text"] { padding: 15px; width: 80%; margin-bottom: 10px; border-radius: 8px; border: 1px solid #555; background: #333; color: white; }
         .checkbox-container { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 15px; padding: 10px; background: rgba(142, 68, 173, 0.2); border-radius: 8px; }
-        .role-reveal { font-size: 20px; color: #f1c40f; margin: 15px 0; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 8px; }
+        .role-reveal { font-size: 24px; color: #f1c40f; margin: 15px 0; padding: 15px; background: rgba(255,255,255,0.1); border-radius: 8px; display: none; border: 2px solid #f1c40f; }
         .player-item { padding: 10px; margin: 5px 0; border-radius: 5px; background: rgba(128,128,128,0.1); display: flex; justify-content: space-between; align-items: center; }
         .player-item.dead { text-decoration: line-through; opacity: 0.6; background: rgba(192, 57, 43, 0.2); }
         .role-badge { font-size: 0.8em; padding: 2px 6px; border-radius: 4px; background: #555; color: #fff; margin-right: 5px; }
@@ -37,8 +37,6 @@ HTML_TEMPLATE = """
         .log-entry { font-size: 14px; margin-bottom: 5px; border-bottom: 1px solid #444; }
         .admin-panel { border: 2px solid var(--admin-color); padding: 10px; border-radius: 10px; margin-bottom: 20px; display: none;}
         .hidden { display: none !important; }
-        
-        /* Loading Spinner */
         .loader { border: 5px solid #f3f3f3; border-top: 5px solid var(--accent-color); border-radius: 50%; width: 30px; height: 30px; animation: spin 2s linear infinite; margin: 20px auto; display:none;}
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
@@ -53,20 +51,16 @@ HTML_TEMPLATE = """
             <h3>تسجيل الدخول</h3>
             <input type="text" id="username" placeholder="الاسم" />
             <input type="text" id="room" placeholder="اسم الغرفة" oninput="checkAdminStatus()" />
-            
             <div id="loading-check" class="loader"></div>
-
             <div id="admin-option" class="checkbox-container hidden">
                 <input type="checkbox" id="is-admin-check">
                 <label for="is-admin-check">دخول كمشرف (Admin) 🛠️</label>
             </div>
-
             <button onclick="joinGame()">دخول</button>
         </div>
 
         <!-- منطقة اللعبة -->
         <div id="game-area" style="display: none;">
-            
             <!-- لوحة المشرف -->
             <div id="admin-controls" class="admin-panel">
                 <h3 style="color:var(--admin-color)">🛠️ لوحة تحكم المشرف</h3>
@@ -79,7 +73,8 @@ HTML_TEMPLATE = """
                 <div id="phase-icon"></div>
                 <h2>غرفة: <span id="room-name"></span></h2>
                 <div id="game-status" class="status"></div>
-                <div id="my-role" class="role-reveal hidden"></div>
+                <!-- منطقة كشف الدور المحسنة -->
+                <div id="my-role" class="role-reveal"></div>
                 <div id="action-area"></div>
             </div>
 
@@ -96,26 +91,16 @@ HTML_TEMPLATE = """
     </div>
 
     <script>
-        // التهيئة
         let socket;
-        try {
-            socket = io({transports: ['websocket', 'polling']});
-        } catch(e) {
-            document.getElementById('connection-error').style.display = 'block';
-            console.error("Socket Error:", e);
-        }
+        try { socket = io({transports: ['websocket', 'polling']}); } 
+        catch(e) { document.getElementById('connection-error').style.display = 'block'; }
 
         let myName = "";
         let myRoom = "";
         let amIAdmin = false;
-
-        // التحقق من حالة الاتصال
-        socket.on('connect', () => {
-            console.log("Connected to server!");
-        });
+        let myRole = ""; // تخزين محلي للدور
 
         socket.on('connect_error', (err) => {
-            console.log("Connection failed", err);
             document.getElementById('connection-error').style.display = 'block';
             document.getElementById('connection-error').innerText = "⚠️ فشل الاتصال: " + err.message;
         });
@@ -161,12 +146,12 @@ HTML_TEMPLATE = """
         }
 
         function startGame() { socket.emit('start_game', {room: myRoom}); }
-        function restartGame() { if(confirm("هل أنت متأكد؟")) socket.emit('restart_game', {room: myRoom}); }
+        function restartGame() { if(confirm("تأكيد التصفير؟")) socket.emit('restart_game', {room: myRoom}); }
         function sendAction(target, actionType) { socket.emit('night_action', {room: myRoom, target: target, action: actionType}); }
-        function votePlayer(target) { if(confirm(`التصويت ضد ${target}؟`)) socket.emit('day_vote', {room: myRoom, target: target}); }
+        function votePlayer(target) { if(confirm(`تصويت ضد ${target}؟`)) socket.emit('day_vote', {room: myRoom, target: target}); }
 
         socket.on('error_msg', (msg) => alert(msg));
-        socket.on('check_result', (msg) => alert(`🔍 نتيجة الفحص:\n${msg}`));
+        socket.on('check_result', (msg) => alert(`🔍 النتيجة:\n${msg}`));
         socket.on('action_confirmed', () => document.getElementById('action-area').innerHTML = "<h3>✅ تم التسجيل</h3>");
         
         socket.on('log_message', (msg) => {
@@ -174,8 +159,9 @@ HTML_TEMPLATE = """
             logs.innerHTML = `<div class="log-entry">> ${msg}</div>` + logs.innerHTML;
         });
 
+        // --- الدالة المحدثة لمنع اختفاء الدور ---
         socket.on('update_state', (data) => {
-            // تحديث الثيم
+            // 1. تحديث الثيم
             if (data.phase === 'voting' || data.phase === 'lobby') {
                 document.body.classList.add('day-theme');
                 document.getElementById('phase-icon').innerHTML = "☀️";
@@ -187,16 +173,24 @@ HTML_TEMPLATE = """
             document.getElementById('game-status').innerText = data.phase_display;
             document.getElementById('player-count').innerText = `(${data.players.length})`;
 
-            // تحديث القائمة
+            // 2. تحديث القائمة والبحث عن الدور القادم من السيرفر
             const list = document.getElementById('players-list');
             list.innerHTML = "";
+            let serverSentMyRole = null;
+
             data.players.forEach(p => {
                 const item = document.createElement('div');
                 item.className = `player-item ${p.is_alive ? '' : 'dead'}`;
                 
                 let roleDisplay = "";
+                // المشرف يرى كل الأدوار
                 if (data.is_admin && p.role) {
                      roleDisplay = `<span class="role-badge" style="background:${getRoleColor(p.role)}">${p.role}</span>`;
+                }
+                
+                // هل السيرفر أرسل دوري في هذا التحديث؟
+                if (p.name === myName && p.role) {
+                    serverSentMyRole = p.role;
                 }
                 
                 item.innerHTML = `
@@ -206,40 +200,50 @@ HTML_TEMPLATE = """
                 list.appendChild(item);
             });
 
-            // منطقة الأكشن للاعبين فقط
+            // 3. المنطق الذكي للحفاظ على الدور (Fix Disappearing Role)
             if (!amIAdmin) {
-                const me = data.players.find(p => p.name === myName);
                 const roleDiv = document.getElementById('my-role');
                 const actionArea = document.getElementById('action-area');
                 actionArea.innerHTML = "";
 
-                if (me) {
-                    if (me.role && data.phase !== 'lobby') {
-                        roleDiv.classList.remove('hidden');
-                        roleDiv.innerText = `أنت: ${me.role}`;
-                        
-                        if (!me.is_alive) {
-                            actionArea.innerHTML = "<h3 style='color:#c0392b'>لقد تم إقصاؤك 💀</h3>";
-                        } 
-                        else if (data.phase === 'night') {
-                            if (data.pending_action) {
-                                actionArea.innerHTML = "<h3>⏳ بانتظار البقية...</h3>";
-                            } else {
-                                renderNightButtons(actionArea, data.players, me.role);
-                            }
-                        } 
-                        else if (data.phase === 'voting') {
-                            actionArea.innerHTML = `<h3>🗳️ التصويت (${data.votes_needed} للخروج)</h3>`;
-                            data.players.forEach(p => {
-                                if (p.is_alive && p.name !== myName) {
-                                    let v = data.current_votes[p.name] || 0;
-                                    actionArea.innerHTML += `<button class="vote-btn" onclick="votePlayer('${p.name}')">${p.name} (${v})</button>`;
-                                }
-                            });
+                // إذا أرسل السيرفر دوراً جديداً، نحدث الذاكرة المحلية
+                if (serverSentMyRole) {
+                    myRole = serverSentMyRole;
+                }
+
+                // شرط العرض: إذا كان لدينا دور محفوظ واللعبة ليست في اللوبي
+                if (myRole && data.phase !== 'lobby') {
+                    roleDiv.style.display = 'block';
+                    roleDiv.innerText = `أنت: ${myRole}`;
+                    
+                    // منطق الأزرار (يعتمد على الدور المحفوظ)
+                    const me = data.players.find(p => p.name === myName);
+                    
+                    if (me && !me.is_alive) {
+                        actionArea.innerHTML = "<h3 style='color:#c0392b'>لقد تم إقصاؤك 💀</h3>";
+                    } 
+                    else if (data.phase === 'night') {
+                        if (data.pending_action) {
+                            actionArea.innerHTML = "<h3>⏳ بانتظار البقية...</h3>";
+                        } else {
+                            renderNightButtons(actionArea, data.players, myRole);
                         }
-                    } else {
-                        roleDiv.classList.add('hidden');
-                        if (data.phase === 'lobby') actionArea.innerHTML = "<p>بانتظار المشرف لبدء اللعبة...</p>";
+                    } 
+                    else if (data.phase === 'voting') {
+                        actionArea.innerHTML = `<h3>🗳️ التصويت (${data.votes_needed} للخروج)</h3>`;
+                        data.players.forEach(p => {
+                            if (p.is_alive && p.name !== myName) {
+                                let v = data.current_votes[p.name] || 0;
+                                actionArea.innerHTML += `<button class="vote-btn" onclick="votePlayer('${p.name}')">${p.name} (${v})</button>`;
+                            }
+                        });
+                    }
+                } else {
+                    // فقط في اللوبي نقوم بتصفير الدور
+                    if (data.phase === 'lobby') {
+                        myRole = ""; // تصفير الدور
+                        roleDiv.style.display = 'none';
+                        actionArea.innerHTML = "<p>بانتظار المشرف...</p>";
                     }
                 }
             }
@@ -280,7 +284,7 @@ HTML_TEMPLATE = """
 </html>
 """
 
-# --- Backend Logic (بدون تغييرات جوهرية، فقط للتأكد من التوافق) ---
+# --- Backend Logic ---
 class Game:
     def __init__(self):
         self.players = [] 
@@ -305,6 +309,7 @@ class Game:
         is_admin = (requester_sid == self.admin_sid)
         public_players = []
         for p in self.players:
+            # إرسال الدور إذا كان الطالب مشرفاً أو اللاعب نفسه
             role_to_show = p['role'] if (is_admin or p['sid'] == requester_sid) else None
             public_players.append({
                 'name': p['name'], 'is_alive': p['is_alive'], 'role': role_to_show 
@@ -408,9 +413,12 @@ def on_start(data):
     if not game or request.sid != game.admin_sid: return
     success, msg = game.assign_roles()
     if success:
-        emit('update_state', game.get_state(), room=room) 
-        emit('update_state', game.get_state(game.admin_sid), to=game.admin_sid)
         emit('log_message', "🔔 بدأت اللعبة!", room=room)
+        # تحديث خاص للمشرف
+        emit('update_state', game.get_state(game.admin_sid), to=game.admin_sid)
+        # تحديث خاص لكل لاعب (لضمان وصول الدور له تحديداً)
+        for p in game.players:
+            emit('update_state', game.get_state(p['sid']), to=p['sid'])
     else:
         emit('error_msg', msg, to=request.sid)
 
@@ -464,8 +472,11 @@ def on_action(data):
         if win:
             game.phase = 'game_over'
             emit('log_message', f"🎉 الفائز: {win}", room=room)
-        emit('update_state', game.get_state(), room=room)
+        
+        # تحديث لكل لاعب على حدة بعد انتهاء الليل أيضاً لضمان استمرار الحالة
         if game.admin_sid: emit('update_state', game.get_state(game.admin_sid), to=game.admin_sid)
+        for p in game.players:
+            emit('update_state', game.get_state(p['sid']), to=p['sid'])
 
 @socketio.on('day_vote')
 def on_vote(data):
@@ -498,8 +509,10 @@ def on_vote(data):
             else:
                 game.start_night()
                 emit('log_message', "🔔 الليل...", room=room)
-            emit('update_state', game.get_state(), room=room)
+            
+            # تحديث للجميع
             if game.admin_sid: emit('update_state', game.get_state(game.admin_sid), to=game.admin_sid)
+            for p in game.players: emit('update_state', game.get_state(p['sid']), to=p['sid'])
             break
 
 if __name__ == '__main__':
