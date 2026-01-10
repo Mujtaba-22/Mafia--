@@ -7,7 +7,6 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'mafia_classic_secret'
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
-# --- HTML Template ---
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -18,90 +17,23 @@ HTML_TEMPLATE = """
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --bg-color: #121212;
-            --card-bg: #1e1e1e;
-            --text-color: #e0e0e0;
-            --accent-color: #c0392b;
-            --admin-color: #8e44ad;
-        }
-
-        body.day-theme {
-            --bg-color: #f0f2f5;
-            --card-bg: #ffffff;
-            --text-color: #2c3e50;
-            --accent-color: #2980b9;
-        }
-
-        body { 
-            font-family: 'Tajawal', sans-serif; 
-            background-color: var(--bg-color); 
-            color: var(--text-color); 
-            text-align: center; 
-            padding: 20px; 
-            margin: 0; 
-            transition: background-color 1s ease;
-        }
-
+        :root { --bg-color: #121212; --card-bg: #1e1e1e; --text-color: #e0e0e0; --accent-color: #c0392b; --admin-color: #8e44ad; }
+        body.day-theme { --bg-color: #f0f2f5; --card-bg: #ffffff; --text-color: #2c3e50; --accent-color: #2980b9; }
+        body { font-family: 'Tajawal', sans-serif; background-color: var(--bg-color); color: var(--text-color); text-align: center; padding: 20px; margin: 0; transition: background-color 1s ease; }
         .container { max-width: 600px; margin: 0 auto; }
-        .card { 
-            background: var(--card-bg); 
-            padding: 25px; 
-            border-radius: 15px; 
-            margin: 15px auto; 
-            box-shadow: 0 8px 20px rgba(0,0,0,0.2); 
-        }
-
+        .card { background: var(--card-bg); padding: 25px; border-radius: 15px; margin: 15px auto; box-shadow: 0 8px 20px rgba(0,0,0,0.2); }
         h1 { color: var(--accent-color); margin-bottom: 10px; }
-
-        button { 
-            background: var(--accent-color); 
-            color: white; 
-            border: none; 
-            padding: 15px; 
-            border-radius: 8px; 
-            cursor: pointer; 
-            font-size: 16px; 
-            margin: 5px; 
-            width: 100%; 
-            max-width: 300px;
-            font-weight: bold;
-        }
+        button { background: var(--accent-color); color: white; border: none; padding: 15px; border-radius: 8px; cursor: pointer; font-size: 16px; margin: 5px; width: 100%; max-width: 300px; font-weight: bold; }
         button.admin-btn { background: var(--admin-color); border: 2px solid #fff; }
         button:hover { filter: brightness(1.1); transform: translateY(-2px); }
-
-        input[type="text"] { 
-            padding: 15px; width: 80%; margin-bottom: 10px; 
-            border-radius: 8px; border: 1px solid #555; 
-            background: #333; color: white;
-        }
-
-        .checkbox-container {
-            display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 15px;
-            padding: 10px; background: rgba(142, 68, 173, 0.2); border-radius: 8px;
-        }
-        
-        .role-reveal { 
-            font-size: 20px; color: #f1c40f; margin: 15px 0; padding: 10px; 
-            background: rgba(255,255,255,0.1); border-radius: 8px;
-        }
-
-        .player-item { 
-            padding: 10px; margin: 5px 0; border-radius: 5px; background: rgba(128,128,128,0.1);
-            display: flex; justify-content: space-between; align-items: center;
-        }
+        input[type="text"] { padding: 15px; width: 80%; margin-bottom: 10px; border-radius: 8px; border: 1px solid #555; background: #333; color: white; }
+        .checkbox-container { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 15px; padding: 10px; background: rgba(142, 68, 173, 0.2); border-radius: 8px; }
+        .role-reveal { font-size: 20px; color: #f1c40f; margin: 15px 0; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 8px; }
+        .player-item { padding: 10px; margin: 5px 0; border-radius: 5px; background: rgba(128,128,128,0.1); display: flex; justify-content: space-between; align-items: center; }
         .player-item.dead { text-decoration: line-through; opacity: 0.6; background: rgba(192, 57, 43, 0.2); }
-        
-        .role-badge {
-            font-size: 0.8em; padding: 2px 6px; border-radius: 4px; background: #555; color: #fff; margin-right: 5px;
-        }
-
-        #logs-container { 
-            height: 200px; overflow-y: auto; text-align: right; 
-            background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; 
-        }
+        .role-badge { font-size: 0.8em; padding: 2px 6px; border-radius: 4px; background: #555; color: #fff; margin-right: 5px; }
+        #logs-container { height: 200px; overflow-y: auto; text-align: right; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; }
         .log-entry { font-size: 14px; margin-bottom: 5px; border-bottom: 1px solid #444; }
-        
         .admin-panel { border: 2px solid var(--admin-color); padding: 10px; border-radius: 10px; margin-bottom: 20px; display: none;}
         .hidden { display: none !important; }
     </style>
@@ -140,7 +72,6 @@ HTML_TEMPLATE = """
                 <h2>غرفة: <span id="room-name"></span></h2>
                 <div id="game-status" class="status"></div>
                 <div id="my-role" class="role-reveal hidden"></div>
-                
                 <div id="action-area"></div>
             </div>
 
@@ -161,16 +92,11 @@ HTML_TEMPLATE = """
         let myName = "";
         let myRoom = "";
         let amIAdmin = false;
-        let myRole = "";
 
-        // التحقق الفوري عند كتابة اسم الغرفة
         function checkAdminStatus() {
             const roomName = document.getElementById('room').value.trim();
-            if(roomName.length > 2) {
-                socket.emit('check_admin_exists', {room: roomName});
-            } else {
-                document.getElementById('admin-option').classList.add('hidden');
-            }
+            if(roomName.length > 2) socket.emit('check_admin_exists', {room: roomName});
+            else document.getElementById('admin-option').classList.add('hidden');
         }
 
         socket.on('admin_status', (data) => {
@@ -196,26 +122,21 @@ HTML_TEMPLATE = """
             document.getElementById('game-area').style.display = 'block';
             document.getElementById('room-name').innerText = myRoom;
 
+            // إظهار لوحة التحكم فوراً إذا كنت مشرفاً
             if (amIAdmin) {
                 document.getElementById('admin-controls').style.display = 'block';
+                document.getElementById('action-area').innerHTML = "<p><em>أنت تراقب اللعبة...</em></p>";
             }
         }
 
         function startGame() { socket.emit('start_game', {room: myRoom}); }
         function restartGame() { if(confirm("هل أنت متأكد؟")) socket.emit('restart_game', {room: myRoom}); }
-        
-        function sendAction(target, actionType) {
-            socket.emit('night_action', {room: myRoom, target: target, action: actionType});
-        }
-        
-        function votePlayer(target) {
-            if(confirm(`التصويت ضد ${target}؟`)) socket.emit('day_vote', {room: myRoom, target: target});
-        }
+        function sendAction(target, actionType) { socket.emit('night_action', {room: myRoom, target: target, action: actionType}); }
+        function votePlayer(target) { if(confirm(`التصويت ضد ${target}؟`)) socket.emit('day_vote', {room: myRoom, target: target}); }
 
-        // --- Socket Listeners ---
         socket.on('error_msg', (msg) => alert(msg));
         socket.on('check_result', (msg) => alert(`🔍 نتيجة الفحص:\n${msg}`));
-        socket.on('action_confirmed', () => document.getElementById('action-area').innerHTML = "<h3>✅ تم تسجيل الطلب</h3>");
+        socket.on('action_confirmed', () => document.getElementById('action-area').innerHTML = "<h3>✅ تم التسجيل</h3>");
         
         socket.on('log_message', (msg) => {
             const logs = document.getElementById('game-logs');
@@ -223,6 +144,7 @@ HTML_TEMPLATE = """
         });
 
         socket.on('update_state', (data) => {
+            // تحديث الثيم
             if (data.phase === 'voting' || data.phase === 'lobby') {
                 document.body.classList.add('day-theme');
                 document.getElementById('phase-icon').innerHTML = "☀️";
@@ -234,14 +156,18 @@ HTML_TEMPLATE = """
             document.getElementById('game-status').innerText = data.phase_display;
             document.getElementById('player-count').innerText = `(${data.players.length})`;
 
+            // تحديث قائمة اللاعبين
             const list = document.getElementById('players-list');
             list.innerHTML = "";
             data.players.forEach(p => {
                 const item = document.createElement('div');
                 item.className = `player-item ${p.is_alive ? '' : 'dead'}`;
                 
+                // المشرف يرى كل الأدوار، اللاعب يرى دوره فقط (الذي يأتي من السيرفر)
                 let roleDisplay = "";
-                if (data.is_admin && p.role) roleDisplay = `<span class="role-badge" style="background:${getRoleColor(p.role)}">${p.role}</span>`;
+                if (data.is_admin && p.role) {
+                     roleDisplay = `<span class="role-badge" style="background:${getRoleColor(p.role)}">${p.role}</span>`;
+                }
                 
                 item.innerHTML = `
                     <div>${roleDisplay} <strong>${p.name}</strong></div>
@@ -250,6 +176,7 @@ HTML_TEMPLATE = """
                 list.appendChild(item);
             });
 
+            // تحديث منطقة الأكشن للاعبين فقط
             if (!amIAdmin) {
                 const me = data.players.find(p => p.name === myName);
                 const roleDiv = document.getElementById('my-role');
@@ -260,34 +187,32 @@ HTML_TEMPLATE = """
                     if (me.role && data.phase !== 'lobby') {
                         roleDiv.classList.remove('hidden');
                         roleDiv.innerText = `أنت: ${me.role}`;
-                        myRole = me.role;
+                        
+                        // رسم الأزرار بناءً على الدور
+                        if (!me.is_alive) {
+                            actionArea.innerHTML = "<h3 style='color:#c0392b'>لقد تم إقصاؤك 💀</h3>";
+                        } 
+                        else if (data.phase === 'night') {
+                            if (data.pending_action) {
+                                actionArea.innerHTML = "<h3>⏳ بانتظار البقية...</h3>";
+                            } else {
+                                renderNightButtons(actionArea, data.players, me.role);
+                            }
+                        } 
+                        else if (data.phase === 'voting') {
+                            actionArea.innerHTML = `<h3>🗳️ التصويت (${data.votes_needed} للخروج)</h3>`;
+                            data.players.forEach(p => {
+                                if (p.is_alive && p.name !== myName) {
+                                    let v = data.current_votes[p.name] || 0;
+                                    actionArea.innerHTML += `<button class="vote-btn" onclick="votePlayer('${p.name}')">${p.name} (${v})</button>`;
+                                }
+                            });
+                        }
                     } else {
                         roleDiv.classList.add('hidden');
-                    }
-
-                    if (!me.is_alive) {
-                        actionArea.innerHTML = "<h3 style='color:#c0392b'>لقد تم إقصاؤك 💀</h3>";
-                    } 
-                    else if (data.phase === 'night') {
-                        if (data.pending_action) {
-                            actionArea.innerHTML = "<h3>⏳ بانتظار البقية...</h3>";
-                        } else {
-                            renderNightButtons(actionArea, data.players, myRole);
-                        }
-                    } 
-                    else if (data.phase === 'voting') {
-                        actionArea.innerHTML = `<h3>🗳️ التصويت (${data.votes_needed} للخروج)</h3>`;
-                        data.players.forEach(p => {
-                            if (p.is_alive && p.name !== myName) {
-                                let v = data.current_votes[p.name] || 0;
-                                actionArea.innerHTML += `<button class="vote-btn" onclick="votePlayer('${p.name}')">${p.name} (${v})</button>`;
-                            }
-                        });
+                        if (data.phase === 'lobby') actionArea.innerHTML = "<p>بانتظار المشرف لبدء اللعبة...</p>";
                     }
                 }
-            } else {
-                document.getElementById('action-area').innerHTML = "<p><em>أنت تراقب اللعبة...</em></p>";
-                document.getElementById('my-role').classList.add('hidden');
             }
         });
 
@@ -326,12 +251,10 @@ HTML_TEMPLATE = """
 </html>
 """
 
-# --- Backend Logic ---
-
 class Game:
     def __init__(self):
         self.players = [] 
-        self.admin_sid = None  # تخزين وحيد للمشرف
+        self.admin_sid = None
         self.phase = 'lobby' 
         self.night_actions = {'saves': [], 'checks': []}
         self.mafia_votes = {} 
@@ -353,19 +276,16 @@ class Game:
         
         public_players = []
         for p in self.players:
-            role_to_show = p['role'] if is_admin else None
+            # إذا كان هو المشرف، أو هو اللاعب نفسه، نرسل الدور
+            role_to_show = p['role'] if (is_admin or p['sid'] == requester_sid) else None
+            
             public_players.append({
                 'name': p['name'],
                 'is_alive': p['is_alive'],
                 'role': role_to_show 
             })
         
-        phase_ar = {
-            'lobby': 'صالة الانتظار',
-            'night': 'الليل 🌑',
-            'voting': 'النهار ☀️',
-            'game_over': 'نهاية اللعبة 🏁'
-        }
+        phase_ar = {'lobby': 'صالة الانتظار', 'night': 'الليل 🌑', 'voting': 'النهار ☀️', 'game_over': 'نهاية اللعبة 🏁'}
         
         current_votes_count = {}
         for target in self.votes.values():
@@ -392,13 +312,10 @@ class Game:
 
     def assign_roles(self):
         names = [p['name'] for p in self.players]
-        num_players = len(names)
-        
-        if num_players < 5:
-            return False, "يجب توفر 5 لاعبين على الأقل!"
+        if len(names) < 5: return False, "يجب توفر 5 لاعبين على الأقل!"
 
         roles_pool = ['مافيا', 'مافيا', 'دكتور', 'الشايب']
-        citizens_needed = num_players - len(roles_pool)
+        citizens_needed = len(names) - len(roles_pool)
         roles_pool.extend(['مواطن'] * citizens_needed)
         
         random.shuffle(roles_pool)
@@ -419,14 +336,9 @@ class Game:
     def process_night_results(self):
         killed_name = None
         targets = list(self.mafia_votes.values())
-        
-        target_to_kill = None
-        if targets:
-            if all(t == targets[0] for t in targets): target_to_kill = targets[0]
-        
-        if target_to_kill:
-            if target_to_kill in self.night_actions['saves']: killed_name = None 
-            else:
+        if targets and all(t == targets[0] for t in targets):
+            target_to_kill = targets[0]
+            if target_to_kill not in self.night_actions['saves']:
                 killed_name = target_to_kill
                 for p in self.players:
                     if p['name'] == killed_name: p['is_alive'] = False
@@ -435,61 +347,50 @@ class Game:
         return killed_name
 
     def check_win_condition(self):
-        mafia_alive = sum(1 for p in self.players if p['is_alive'] and p['role'] == 'مافيا')
-        citizens_alive = sum(1 for p in self.players if p['is_alive'] and p['role'] != 'مافيا')
-        
-        if mafia_alive == 0: return 'citizens'
-        if citizens_alive <= 1: return 'mafia'
+        mafia = sum(1 for p in self.players if p['is_alive'] and p['role'] == 'مافيا')
+        citizens = sum(1 for p in self.players if p['is_alive'] and p['role'] != 'مافيا')
+        if mafia == 0: return 'citizens'
+        if citizens <= 1: return 'mafia'
         return None
 
 games = {}
 
 @app.route('/')
-def index():
-    return render_template_string(HTML_TEMPLATE)
+def index(): return render_template_string(HTML_TEMPLATE)
 
-# دالة جديدة للتحقق من وجود مشرف
 @socketio.on('check_admin_exists')
 def on_check_admin(data):
     room = data['room']
-    has_admin = False
-    if room in games and games[room].admin_sid is not None:
-        has_admin = True
+    has_admin = (room in games and games[room].admin_sid is not None)
     emit('admin_status', {'exists': has_admin}, to=request.sid)
 
 @socketio.on('join')
 def on_join(data):
     username = data['username']
     room = data['room']
-    is_admin_request = data.get('is_admin', False)
+    is_admin = data.get('is_admin', False)
     
     join_room(room)
     if room not in games: games[room] = Game()
     game = games[room]
     
-    # 1. محاولة الدخول كمشرف
-    if is_admin_request:
+    if is_admin:
         if game.admin_sid is not None:
-            # إذا كان هناك مشرف بالفعل، نرفض الطلب
-            emit('error_msg', "⛔ يوجد مشرف بالفعل لهذه الغرفة!", to=request.sid)
-            return
-        
+             emit('error_msg', "يوجد مشرف بالفعل!", to=request.sid)
+             return
         game.admin_sid = request.sid
-        emit('log_message', f"🛡️ تم تعيين المشرف: {username}", room=room)
-        emit('update_state', game.get_state(request.sid), room=room)
-        return
-
-    # 2. دخول كلاعب عادي
-    existing_player = next((p for p in game.players if p['name'] == username), None)
-    if existing_player:
-        existing_player['sid'] = request.sid
-        emit('log_message', f"عودة {username}", to=request.sid)
+        emit('log_message', f"🛡️ المشرف {username} انضم", room=room)
     else:
-        if game.phase != 'lobby':
-            emit('error_msg', "اللعبة جارية!", to=request.sid)
-            return
-        game.players.append({'name': username, 'role': None, 'is_alive': True, 'sid': request.sid})
-        emit('log_message', f"انضم اللاعب {username}", room=room)
+        existing = next((p for p in game.players if p['name'] == username), None)
+        if existing:
+            existing['sid'] = request.sid
+            emit('log_message', f"عودة {username}", to=request.sid)
+        else:
+            if game.phase != 'lobby':
+                emit('error_msg', "اللعبة جارية!", to=request.sid)
+                return
+            game.players.append({'name': username, 'role': None, 'is_alive': True, 'sid': request.sid})
+            emit('log_message', f"انضم {username}", room=room)
     
     emit('update_state', game.get_state(request.sid), room=room)
 
@@ -497,15 +398,14 @@ def on_join(data):
 def on_start(data):
     room = data['room']
     game = games.get(room)
-    if not game: return
-    
-    if request.sid != game.admin_sid:
-        return emit('error_msg', "⛔ فقط المشرف!", to=request.sid)
-
+    if not game or request.sid != game.admin_sid: return
     success, msg = game.assign_roles()
     if success:
-        emit('update_state', game.get_state(), room=room)
-        emit('log_message', "🔔 <span class='highlight'>بدأت اللعبة!</span>", room=room)
+        # تحديث للجميع (اللاعبين + المشرف)
+        emit('update_state', game.get_state(), room=room) 
+        # تحديث خاص للمشرف ليرى الأدوار فوراً
+        emit('update_state', game.get_state(game.admin_sid), to=game.admin_sid)
+        emit('log_message', "🔔 بدأت اللعبة!", room=room)
     else:
         emit('error_msg', msg, to=request.sid)
 
@@ -513,107 +413,96 @@ def on_start(data):
 def on_restart(data):
     room = data['room']
     game = games.get(room)
-    
-    if request.sid != game.admin_sid:
-        return emit('error_msg', "⛔ فقط المشرف!", to=request.sid)
-
+    if not game or request.sid != game.admin_sid: return
     game.reset_game()
     emit('update_state', game.get_state(), room=room)
-    emit('log_message', "🔄 تم إعادة ضبط اللعبة!", room=room)
+    emit('update_state', game.get_state(game.admin_sid), to=game.admin_sid)
+    emit('log_message', "🔄 تصفير اللعبة!", room=room)
 
 @socketio.on('night_action')
 def on_action(data):
     room = data['room']
     game = games.get(room)
     if not game or game.phase != 'night': return
-    if request.sid == game.admin_sid: return
-
-    action = data['action']
-    target = data['target']
+    
     player = next((p for p in game.players if p['sid'] == request.sid), None)
     if not player or not player['is_alive']: return
 
+    action = data['action']
+    target = data['target']
+
     if action == 'kill' and player['role'] == 'مافيا':
-        target_player = next((p for p in game.players if p['name'] == target), None)
-        if target_player and target_player['role'] == 'مافيا':
-             emit('error_msg', "🚫 لا يمكنك قتل زميلك!", to=request.sid)
+        t_p = next((p for p in game.players if p['name'] == target), None)
+        if t_p and t_p['role'] == 'مافيا':
+             emit('error_msg', "لا تقتل زميلك!", to=request.sid)
              return
         game.mafia_votes[player['name']] = target
-
     elif action == 'save': game.night_actions['saves'].append(target)
     elif action == 'check': 
-        target_role = next((p['role'] for p in game.players if p['name'] == target), 'مواطن')
-        result = "😈 مافيا!" if target_role == 'مافيا' else "😇 بريء."
-        emit('check_result', result, to=request.sid)
-    
+        t_p = next((p for p in game.players if p['name'] == target), None)
+        res = "😈 مافيا!" if t_p and t_p['role'] == 'مافيا' else "😇 بريء."
+        emit('check_result', res, to=request.sid)
+
     game.players_who_acted.add(player['name'])
     emit('action_confirmed', to=request.sid)
     
+    # تحديث اللاعب (لإظهار الانتظار) وتحديث المشرف (ليرى التقدم)
     emit('update_state', game.get_state(request.sid), to=request.sid)
-    if game.admin_sid:
-        emit('update_state', game.get_state(game.admin_sid), to=game.admin_sid)
+    if game.admin_sid: emit('update_state', game.get_state(game.admin_sid), to=game.admin_sid)
 
-    roles_needed = [p['name'] for p in game.players if p['is_alive'] and p['role'] in ['مافيا', 'دكتور', 'الشايب']]
-    
-    if all(name in game.players_who_acted for name in roles_needed):
+    roles = [p['name'] for p in game.players if p['is_alive'] and p['role'] in ['مافيا', 'دكتور', 'الشايب']]
+    if all(name in game.players_who_acted for name in roles):
         socketio.sleep(1)
-        dead_person = game.process_night_results()
-        
-        msg = f"☀️ مات: <span class='highlight'>{dead_person}</span>" if dead_person else "☀️ لم يمت أحد"
+        dead = game.process_night_results()
+        msg = f"☀️ مات: {dead}" if dead else "☀️ لم يمت أحد"
         emit('log_message', msg, room=room)
         
-        winner = game.check_win_condition()
-        if winner:
+        win = game.check_win_condition()
+        if win:
             game.phase = 'game_over'
-            end_msg = "🎉 فاز المواطنون!" if winner == 'citizens' else "😈 فازت المافيا!"
-            emit('log_message', end_msg, room=room)
-            emit('game_over', end_msg, room=room)
+            emit('log_message', f"🎉 الفائز: {win}", room=room)
         
+        # تحديث جماعي للجميع (يخفي الأدوار)
         emit('update_state', game.get_state(), room=room)
+        # تحديث خاص للمشرف (يظهر الأدوار)
+        if game.admin_sid: emit('update_state', game.get_state(game.admin_sid), to=game.admin_sid)
 
 @socketio.on('day_vote')
 def on_vote(data):
     room = data['room']
     game = games.get(room)
     if not game or game.phase != 'voting': return
-    if request.sid == game.admin_sid: return
     
-    voter_sid = request.sid
-    target = data['target']
-    
-    voter = next((p for p in game.players if p['sid'] == voter_sid), None)
-    if not voter or not voter['is_alive']: return
+    player = next((p for p in game.players if p['sid'] == request.sid), None)
+    if not player or not player['is_alive']: return
 
-    game.votes[voter['name']] = target
+    game.votes[player['name']] = data['target']
     
     emit('update_state', game.get_state(), room=room)
+    if game.admin_sid: emit('update_state', game.get_state(game.admin_sid), to=game.admin_sid)
+
+    counts = {}
+    for t in game.votes.values(): counts[t] = counts.get(t, 0) + 1
     
-    current_votes_count = {}
-    for t in game.votes.values():
-        current_votes_count[t] = current_votes_count.get(t, 0) + 1
+    alive = sum(1 for p in game.players if p['is_alive'])
+    needed = (alive // 2) + 1
     
-    alive_count = sum(1 for p in game.players if p['is_alive'])
-    votes_needed = (alive_count // 2) + 1
-    
-    for t, count in current_votes_count.items():
-        if count >= votes_needed:
-            eliminated = t
+    for t, c in counts.items():
+        if c >= needed:
             for p in game.players:
-                if p['name'] == eliminated: p['is_alive'] = False
+                if p['name'] == t: p['is_alive'] = False
+            emit('log_message', f"⚖️ إعدام: {t}", room=room)
             
-            emit('log_message', f"⚖️ تم إعدام: <span class='highlight'>{eliminated}</span>", room=room)
-            
-            winner = game.check_win_condition()
-            if winner:
+            win = game.check_win_condition()
+            if win:
                 game.phase = 'game_over'
-                end_msg = "🎉 فاز المواطنون!" if winner == 'citizens' else "😈 فازت المافيا!"
-                emit('log_message', end_msg, room=room)
-                emit('game_over', end_msg, room=room)
+                emit('log_message', f"🎉 الفائز: {win}", room=room)
             else:
                 game.start_night()
-                emit('log_message', "🔔 <span class='highlight'>بدأ الليل...</span>", room=room)
+                emit('log_message', "🔔 الليل...", room=room)
             
             emit('update_state', game.get_state(), room=room)
+            if game.admin_sid: emit('update_state', game.get_state(game.admin_sid), to=game.admin_sid)
             break
 
 if __name__ == '__main__':
