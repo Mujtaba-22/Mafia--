@@ -14,7 +14,8 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mafia Online 🕵️‍♂️</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <!-- استخدام رابط CDN موثوق -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root { --bg-color: #121212; --card-bg: #1e1e1e; --text-color: #e0e0e0; --accent-color: #c0392b; --admin-color: #8e44ad; }
@@ -22,7 +23,7 @@ HTML_TEMPLATE = """
         body { font-family: 'Tajawal', sans-serif; background-color: var(--bg-color); color: var(--text-color); text-align: center; padding: 20px; margin: 0; transition: background-color 1s ease; }
         .container { max-width: 600px; margin: 0 auto; }
         .card { background: var(--card-bg); padding: 25px; border-radius: 15px; margin: 15px auto; box-shadow: 0 8px 20px rgba(0,0,0,0.2); }
-        h1 { color: var(--accent-color); margin-bottom: 10px; }
+        h1 { color: var(--accent-color); margin-bottom: 10px; font-size: 3em; }
         button { background: var(--accent-color); color: white; border: none; padding: 15px; border-radius: 8px; cursor: pointer; font-size: 16px; margin: 5px; width: 100%; max-width: 300px; font-weight: bold; }
         button.admin-btn { background: var(--admin-color); border: 2px solid #fff; }
         button:hover { filter: brightness(1.1); transform: translateY(-2px); }
@@ -36,11 +37,16 @@ HTML_TEMPLATE = """
         .log-entry { font-size: 14px; margin-bottom: 5px; border-bottom: 1px solid #444; }
         .admin-panel { border: 2px solid var(--admin-color); padding: 10px; border-radius: 10px; margin-bottom: 20px; display: none;}
         .hidden { display: none !important; }
+        
+        /* Loading Spinner */
+        .loader { border: 5px solid #f3f3f3; border-top: 5px solid var(--accent-color); border-radius: 50%; width: 30px; height: 30px; animation: spin 2s linear infinite; margin: 20px auto; display:none;}
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>MAFIA 🎩</h1>
+        <div id="connection-error" style="color: red; display: none;">⚠️ خطأ في الاتصال بالسيرفر! يرجى تحديث الصفحة.</div>
 
         <!-- شاشة الدخول -->
         <div id="login-area" class="card">
@@ -48,6 +54,8 @@ HTML_TEMPLATE = """
             <input type="text" id="username" placeholder="الاسم" />
             <input type="text" id="room" placeholder="اسم الغرفة" oninput="checkAdminStatus()" />
             
+            <div id="loading-check" class="loader"></div>
+
             <div id="admin-option" class="checkbox-container hidden">
                 <input type="checkbox" id="is-admin-check">
                 <label for="is-admin-check">دخول كمشرف (Admin) 🛠️</label>
@@ -57,7 +65,7 @@ HTML_TEMPLATE = """
         </div>
 
         <!-- منطقة اللعبة -->
-        <div id="game-area" class="hidden">
+        <div id="game-area" style="display: none;">
             
             <!-- لوحة المشرف -->
             <div id="admin-controls" class="admin-panel">
@@ -88,18 +96,42 @@ HTML_TEMPLATE = """
     </div>
 
     <script>
-        const socket = io({transports: ['websocket', 'polling']});
+        // التهيئة
+        let socket;
+        try {
+            socket = io({transports: ['websocket', 'polling']});
+        } catch(e) {
+            document.getElementById('connection-error').style.display = 'block';
+            console.error("Socket Error:", e);
+        }
+
         let myName = "";
         let myRoom = "";
         let amIAdmin = false;
 
+        // التحقق من حالة الاتصال
+        socket.on('connect', () => {
+            console.log("Connected to server!");
+        });
+
+        socket.on('connect_error', (err) => {
+            console.log("Connection failed", err);
+            document.getElementById('connection-error').style.display = 'block';
+            document.getElementById('connection-error').innerText = "⚠️ فشل الاتصال: " + err.message;
+        });
+
         function checkAdminStatus() {
             const roomName = document.getElementById('room').value.trim();
-            if(roomName.length > 2) socket.emit('check_admin_exists', {room: roomName});
-            else document.getElementById('admin-option').classList.add('hidden');
+            if(roomName.length > 2) {
+                document.getElementById('loading-check').style.display = 'block';
+                socket.emit('check_admin_exists', {room: roomName});
+            } else {
+                document.getElementById('admin-option').classList.add('hidden');
+            }
         }
 
         socket.on('admin_status', (data) => {
+            document.getElementById('loading-check').style.display = 'none';
             const adminDiv = document.getElementById('admin-option');
             if (data.exists) {
                 adminDiv.classList.add('hidden');
@@ -114,7 +146,7 @@ HTML_TEMPLATE = """
             myRoom = document.getElementById('room').value.trim();
             amIAdmin = document.getElementById('is-admin-check').checked;
 
-            if (!myName || !myRoom) return alert("البيانات ناقصة");
+            if (!myName || !myRoom) return alert("الرجاء إدخال البيانات");
 
             socket.emit('join', {username: myName, room: myRoom, is_admin: amIAdmin});
             
@@ -122,7 +154,6 @@ HTML_TEMPLATE = """
             document.getElementById('game-area').style.display = 'block';
             document.getElementById('room-name').innerText = myRoom;
 
-            // إظهار لوحة التحكم فوراً إذا كنت مشرفاً
             if (amIAdmin) {
                 document.getElementById('admin-controls').style.display = 'block';
                 document.getElementById('action-area').innerHTML = "<p><em>أنت تراقب اللعبة...</em></p>";
@@ -156,14 +187,13 @@ HTML_TEMPLATE = """
             document.getElementById('game-status').innerText = data.phase_display;
             document.getElementById('player-count').innerText = `(${data.players.length})`;
 
-            // تحديث قائمة اللاعبين
+            // تحديث القائمة
             const list = document.getElementById('players-list');
             list.innerHTML = "";
             data.players.forEach(p => {
                 const item = document.createElement('div');
                 item.className = `player-item ${p.is_alive ? '' : 'dead'}`;
                 
-                // المشرف يرى كل الأدوار، اللاعب يرى دوره فقط (الذي يأتي من السيرفر)
                 let roleDisplay = "";
                 if (data.is_admin && p.role) {
                      roleDisplay = `<span class="role-badge" style="background:${getRoleColor(p.role)}">${p.role}</span>`;
@@ -176,7 +206,7 @@ HTML_TEMPLATE = """
                 list.appendChild(item);
             });
 
-            // تحديث منطقة الأكشن للاعبين فقط
+            // منطقة الأكشن للاعبين فقط
             if (!amIAdmin) {
                 const me = data.players.find(p => p.name === myName);
                 const roleDiv = document.getElementById('my-role');
@@ -188,7 +218,6 @@ HTML_TEMPLATE = """
                         roleDiv.classList.remove('hidden');
                         roleDiv.innerText = `أنت: ${me.role}`;
                         
-                        // رسم الأزرار بناءً على الدور
                         if (!me.is_alive) {
                             actionArea.innerHTML = "<h3 style='color:#c0392b'>لقد تم إقصاؤك 💀</h3>";
                         } 
@@ -251,6 +280,7 @@ HTML_TEMPLATE = """
 </html>
 """
 
+# --- Backend Logic (بدون تغييرات جوهرية، فقط للتأكد من التوافق) ---
 class Game:
     def __init__(self):
         self.players = [] 
@@ -273,20 +303,14 @@ class Game:
 
     def get_state(self, requester_sid=None):
         is_admin = (requester_sid == self.admin_sid)
-        
         public_players = []
         for p in self.players:
-            # إذا كان هو المشرف، أو هو اللاعب نفسه، نرسل الدور
             role_to_show = p['role'] if (is_admin or p['sid'] == requester_sid) else None
-            
             public_players.append({
-                'name': p['name'],
-                'is_alive': p['is_alive'],
-                'role': role_to_show 
+                'name': p['name'], 'is_alive': p['is_alive'], 'role': role_to_show 
             })
         
         phase_ar = {'lobby': 'صالة الانتظار', 'night': 'الليل 🌑', 'voting': 'النهار ☀️', 'game_over': 'نهاية اللعبة 🏁'}
-        
         current_votes_count = {}
         for target in self.votes.values():
             current_votes_count[target] = current_votes_count.get(target, 0) + 1
@@ -297,41 +321,27 @@ class Game:
         pending_action = False
         if requester_sid and not is_admin:
              player = next((p for p in self.players if p['sid'] == requester_sid), None)
-             if player and player['name'] in self.players_who_acted:
-                 pending_action = True
+             if player and player['name'] in self.players_who_acted: pending_action = True
 
         return {
-            'players': public_players,
-            'phase': self.phase,
-            'phase_display': phase_ar.get(self.phase, self.phase),
-            'current_votes': current_votes_count,
-            'votes_needed': votes_needed,
-            'pending_action': pending_action,
-            'is_admin': is_admin
+            'players': public_players, 'phase': self.phase, 'phase_display': phase_ar.get(self.phase, self.phase),
+            'current_votes': current_votes_count, 'votes_needed': votes_needed, 'pending_action': pending_action, 'is_admin': is_admin
         }
 
     def assign_roles(self):
         names = [p['name'] for p in self.players]
         if len(names) < 5: return False, "يجب توفر 5 لاعبين على الأقل!"
-
         roles_pool = ['مافيا', 'مافيا', 'دكتور', 'الشايب']
         citizens_needed = len(names) - len(roles_pool)
         roles_pool.extend(['مواطن'] * citizens_needed)
-        
         random.shuffle(roles_pool)
         for i, p in enumerate(self.players):
-            p['role'] = roles_pool[i]
-            p['is_alive'] = True
-        
+            p['role'] = roles_pool[i]; p['is_alive'] = True
         self.start_night()
         return True, "تم توزيع الأدوار!"
 
     def start_night(self):
-        self.phase = 'night'
-        self.night_actions = {'saves': [], 'checks': []}
-        self.mafia_votes = {} 
-        self.players_who_acted = set()
-        self.votes = {} 
+        self.phase = 'night'; self.night_actions = {'saves': [], 'checks': []}; self.mafia_votes = {}; self.players_who_acted = set(); self.votes = {} 
 
     def process_night_results(self):
         killed_name = None
@@ -342,7 +352,6 @@ class Game:
                 killed_name = target_to_kill
                 for p in self.players:
                     if p['name'] == killed_name: p['is_alive'] = False
-        
         self.phase = 'voting'
         return killed_name
 
@@ -369,7 +378,6 @@ def on_join(data):
     username = data['username']
     room = data['room']
     is_admin = data.get('is_admin', False)
-    
     join_room(room)
     if room not in games: games[room] = Game()
     game = games[room]
@@ -391,7 +399,6 @@ def on_join(data):
                 return
             game.players.append({'name': username, 'role': None, 'is_alive': True, 'sid': request.sid})
             emit('log_message', f"انضم {username}", room=room)
-    
     emit('update_state', game.get_state(request.sid), room=room)
 
 @socketio.on('start_game')
@@ -401,9 +408,7 @@ def on_start(data):
     if not game or request.sid != game.admin_sid: return
     success, msg = game.assign_roles()
     if success:
-        # تحديث للجميع (اللاعبين + المشرف)
         emit('update_state', game.get_state(), room=room) 
-        # تحديث خاص للمشرف ليرى الأدوار فوراً
         emit('update_state', game.get_state(game.admin_sid), to=game.admin_sid)
         emit('log_message', "🔔 بدأت اللعبة!", room=room)
     else:
@@ -424,12 +429,12 @@ def on_action(data):
     room = data['room']
     game = games.get(room)
     if not game or game.phase != 'night': return
-    
-    player = next((p for p in game.players if p['sid'] == request.sid), None)
-    if not player or not player['is_alive']: return
+    if request.sid == game.admin_sid: return
 
     action = data['action']
     target = data['target']
+    player = next((p for p in game.players if p['sid'] == request.sid), None)
+    if not player or not player['is_alive']: return
 
     if action == 'kill' and player['role'] == 'مافيا':
         t_p = next((p for p in game.players if p['name'] == target), None)
@@ -446,7 +451,6 @@ def on_action(data):
     game.players_who_acted.add(player['name'])
     emit('action_confirmed', to=request.sid)
     
-    # تحديث اللاعب (لإظهار الانتظار) وتحديث المشرف (ليرى التقدم)
     emit('update_state', game.get_state(request.sid), to=request.sid)
     if game.admin_sid: emit('update_state', game.get_state(game.admin_sid), to=game.admin_sid)
 
@@ -456,15 +460,11 @@ def on_action(data):
         dead = game.process_night_results()
         msg = f"☀️ مات: {dead}" if dead else "☀️ لم يمت أحد"
         emit('log_message', msg, room=room)
-        
         win = game.check_win_condition()
         if win:
             game.phase = 'game_over'
             emit('log_message', f"🎉 الفائز: {win}", room=room)
-        
-        # تحديث جماعي للجميع (يخفي الأدوار)
         emit('update_state', game.get_state(), room=room)
-        # تحديث خاص للمشرف (يظهر الأدوار)
         if game.admin_sid: emit('update_state', game.get_state(game.admin_sid), to=game.admin_sid)
 
 @socketio.on('day_vote')
@@ -472,18 +472,17 @@ def on_vote(data):
     room = data['room']
     game = games.get(room)
     if not game or game.phase != 'voting': return
+    if request.sid == game.admin_sid: return
     
     player = next((p for p in game.players if p['sid'] == request.sid), None)
     if not player or not player['is_alive']: return
 
     game.votes[player['name']] = data['target']
-    
     emit('update_state', game.get_state(), room=room)
     if game.admin_sid: emit('update_state', game.get_state(game.admin_sid), to=game.admin_sid)
 
     counts = {}
     for t in game.votes.values(): counts[t] = counts.get(t, 0) + 1
-    
     alive = sum(1 for p in game.players if p['is_alive'])
     needed = (alive // 2) + 1
     
@@ -492,7 +491,6 @@ def on_vote(data):
             for p in game.players:
                 if p['name'] == t: p['is_alive'] = False
             emit('log_message', f"⚖️ إعدام: {t}", room=room)
-            
             win = game.check_win_condition()
             if win:
                 game.phase = 'game_over'
@@ -500,7 +498,6 @@ def on_vote(data):
             else:
                 game.start_night()
                 emit('log_message', "🔔 الليل...", room=room)
-            
             emit('update_state', game.get_state(), room=room)
             if game.admin_sid: emit('update_state', game.get_state(game.admin_sid), to=game.admin_sid)
             break
